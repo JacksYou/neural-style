@@ -12,16 +12,13 @@ import matplotlib.pyplot as plt
 class NeuralStylizer:
 
 
-    def __init__(self, cnn, content_img, style_img,  target_shape, output_shape,
-                 enable_cuda, content_layers, style_layers, pooling,
-                 content_weight, style_weight, tv_weight):
-        self.dtype = torch.cuda.FloatTensor if enable_cuda else torch.FloatTensor
+    def __init__(self, cnn, content_img, style_imgs,  style_weights, target_shape, output_shape,
+                 backend, content_layers, style_layers, pooling, A, B, L):
+        self.dtype = torch.cuda.FloatTensor if backend == 'cuda' else torch.FloatTensor
 
         self.imsize = target_shape[0]
         self.content_img, self.original_sz = self._load(content_img, target_shape)
         self.content_img = self.content_img.type(self.dtype)
-        self.style_img, _ = self._load(style_img, target_shape)
-        self.style_img = self.style_img.type(self.dtype)
 
         cnn = copy.deepcopy(cnn)
 
@@ -36,13 +33,13 @@ class NeuralStylizer:
         tv_losses = []
         model = torch.nn.Sequential()  # the new Sequential module network
 
-        if enable_cuda:
+        if backend == 'cuda':
             model = model.cuda()
 
         i = 0
         j = 1
         # apppend total variation at the beginning of model
-        tv_loss = TVLoss(tv_weight)
+        tv_loss = TVLoss(L)
         model.add_module("tv_loss", tv_loss)
         tv_losses.append(tv_loss)
 
@@ -53,15 +50,17 @@ class NeuralStylizer:
 
                 if name in content_layers:
                     target = model(self.content_img).clone()
-                    content_loss = ContentLoss(target, content_weight)
+                    content_loss = ContentLoss(target, A)
                     model.add_module("content_loss_" + str(i), content_loss)
                     content_losses.append(content_loss)
 
                 if name in style_layers:
-                    target = model(self.style_img).clone()
-                    style_loss = StyleLoss(target, style_weight)
-                    model.add_module("style_loss_" + str(i), style_loss)
-                    style_losses.append(style_loss)
+                    for idx, style_img in enumerate(style_imgs):
+                        img, _ = self._load(style_img, target_shape)
+                        target = model(img.type(self.dtype)).clone()
+                        style_loss = StyleLoss(target, style_weights[idx]*B)
+                        model.add_module("style_loss_{}_{}".format(i, idx), style_loss)
+                        style_losses.append(style_loss)
 
             if isinstance(layer, torch.nn.ReLU):
                 name = "relu_{}_{}".format(conv_layers[i][0], conv_layers[i][1])
@@ -80,7 +79,7 @@ class NeuralStylizer:
         self.content_losses = content_losses
         self.tv_losses = tv_losses
 
-    def __call__(self, iterations, output_shape, random_init, output_file):
+    def __call__(self, iterations, output_shape, init, output_file):
         sz, c, h, w = self.content_img.size()
         output_shape = self.original_sz if output_shape is None else output_shape
 
@@ -89,36 +88,35 @@ class NeuralStylizer:
         input_param = torch.nn.Parameter(input_img.data)
         optimizer = torch.optim.LBFGS([input_param])
 
-        pbar = tqdm(total=iterations)
-        run = [0]
-        while run[0] < iterations:
+        with tqdm(total=iterations) as pbar:
+            run = [0]
+            while run[0] < iterations:
 
-            def closure():
-                input_param.data.clamp_(0, 1)
+                def closure():
+                    input_param.data.clamp_(0, 1)
 
-                optimizer.zero_grad()
-                self.model(input_param)
-                style_score = 0
-                content_score = 0
-                tv_score = 0
+                    optimizer.zero_grad()
+                    self.model(input_param)
+                    style_score = 0
+                    content_score = 0
+                    tv_score = 0
 
-                for sl in self.style_losses:
-                    style_score += sl.backward()
-                for cl in self.content_losses:
-                    content_score += cl.backward()
-                for tl in self.tv_losses:
-                    tv_score += tl.backward()
+                    for sl in self.style_losses:
+                        style_score += sl.backward()
+                    for cl in self.content_losses:
+                        content_score += cl.backward()
+                    for tl in self.tv_losses:
+                        tv_score += tl.backward()
 
-                run[0] += 1
-                pbar.set_description('style err: {:4f} content err: {:4f} tv err: {:4f}'.format(
-                      style_score.data[0], content_score.data[0],  tv_score.data[0]))
-                pbar.update(1)
-                return style_score + content_score + tv_score
+                    run[0] += 1
+                    pbar.set_description('style err: {:4f} content err: {:4f} tv err: {:4f}'.format(
+                          style_score.data[0], content_score.data[0],  tv_score.data[0]))
+                    pbar.update(1)
+                    return style_score + content_score + tv_score
 
-            optimizer.step(closure)
+                optimizer.step(closure)
 
-        pbar.close()
-        input_param.data.clamp_(0, 1)
+            input_param.data.clamp_(0, 1)
 
         self._save(input_param.data, output_shape, output_file)
 
