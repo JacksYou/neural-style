@@ -1,5 +1,5 @@
 
-![](examples/content/mcmaster.jpg) | ![](examples/content/result0.jpg)
+![](examples/content/mcmaster.jpg) | ![](examples/output/result0.jpg)
 :-------------------------------:|:--------------------------------:
 ![](examples/output/result1.jpg) |  ![](examples/output/result2.jpg)
 :-------------------------------:|:--------------------------------:
