@@ -59,11 +59,10 @@ def main():
                         choices=['cpu', 'cuda'],
                         default='cpu',
                         help='select from available backends')
-    parser.add_argument('--target-shape',
+    parser.add_argument('--input-size',
                         type=int,
-                        nargs=2,
-                        help='w x h of initial input image fed to neural net, defaults to 224x224 for cpu, 512x512 for cuda if not set')
-    parser.add_argument('--output-shape',
+                        help='n x n of initial input image fed to neural net, defaults to 224x224 for cpu, 512x512 for cuda if not set')
+    parser.add_argument('--output-size',
                         type=int,
                         nargs=2,
                         help='w x h of final image, defaults to size of the content image if not set')
@@ -109,20 +108,23 @@ def main():
     logger.addHandler(term)
 
     enable_cuda = torch.cuda.is_available() if args.backend == 'cuda' else False
-    if args.target_shape is None:
-        args.target_shape = (512, 512) if enable_cuda else (224, 224)
-        logger.info('target shape not set by user, set to {} x {}'.format(*args.target_shape))
+    if args.input_size is None:
+        target_shape = (512, 512) if enable_cuda else (224, 224)
+        logger.info('target shape not set by user, set to {} x {}'.format(*target_shape))
+    else:
+        target_shape(args.input_size, args.input_size)
+
+
     logger.info('fetching vgg19 model')
     cnn = torchvision.models.vgg19(pretrained=True).features
     if enable_cuda:
          cnn.cuda()
     logger.info('initializing model')
     stylize = NeuralStylizer(cnn, args.content_image, args.style_images, args.style_weights,
-                             args.target_shape, args.output_shape, args.backend,
-                             args.content_layers, args.style_layers, args.pooling,
+                             target_shape, args.backend, args.content_layers, args.style_layers, args.pooling,
                              args.A, args.B, args.L)
     logger.info('optimizing..')
-    stylize(args.iterations, args.output_shape, args.init, args.output_file)
+    stylize(args.iterations, args.output_size, args.init, args.output_file)
     logger.info('complete!')
     logger.info('saving output to {}'.format(args.output_file))
 main()

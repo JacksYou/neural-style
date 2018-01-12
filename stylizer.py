@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 class NeuralStylizer:
 
 
-    def __init__(self, cnn, content_img, style_imgs,  style_weights, target_shape, output_shape,
+    def __init__(self, cnn, content_img, style_imgs,  style_weights, target_shape,
                  backend, content_layers, style_layers, pooling, A, B, L):
         self.dtype = torch.cuda.FloatTensor if backend == 'cuda' else torch.FloatTensor
 
