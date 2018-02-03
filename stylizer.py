@@ -1,8 +1,6 @@
 import torch
 import torchvision
 import copy
-import skimage.io
-import skimage.transform
 
 from tqdm import tqdm
 import PIL as pillow
@@ -109,7 +107,7 @@ class NeuralStylizer:
                         tv_score += tl.backward()
 
                     run[0] += 1
-                    pbar.set_description('style err: {:4f} content err: {:4f} tv err: {:4f}'.format(
+                    pbar.set_description('loss(s): {:4f} loss(c): {:4f} loss(tv): {:4f}'.format(
                           style_score.data[0], content_score.data[0],  tv_score.data[0]))
                     pbar.update(1)
                     return style_score + content_score + tv_score
